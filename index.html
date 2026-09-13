@@ -1,0 +1,1008 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+<meta charset="UTF-8">
+<meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
+<title>SeaQuake · Real-time Earthquakes</title>
+<meta name="description" content="Real-time earthquake information across ASEAN and nearby regions, powered by live data from BMKG (Indonesia)">
+<meta name="keywords" content="earthquake, earthquake today, ASEAN earthquake, Southeast Asia earthquake, BMKG, InaTEWS, real-time earthquake info, SeaQuake">
+<meta name="author" content="SeaQuake">
+<meta name="robots" content="index, follow">
+<meta property="og:title" content="SeaQuake — Real-time Earthquake Monitor for ASEAN">
+<meta property="og:description" content="Real-time earthquake information across ASEAN and nearby regions, powered by live data BMKG (Indonesia).">
+<meta property="og:type" content="website">
+<meta name="google-site-verification" content="3_Fq9IDHc9sZGf_B4_UNEVAZLjT3ac4nlL5w4pBxdkw" />
+<meta name="theme-color" content="#0b0d18">
+<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
+<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
+<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
+<link rel="alternate icon" href="favicon.ico">
+<link rel="manifest" href="site.webmanifest">
+<meta name="mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-capable" content="yes">
+<meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
+<meta name="apple-mobile-web-app-title" content="SeaQuake">
+
+<link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
+<script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
+
+<style>
+  :root{
+    --bg-app:#05060d;
+    --topbar-1:#1b2258; --topbar-2:#262f70;
+    --tabbar:#151b42;
+    --card-solid:#141728;
+    --card-border:#232848;
+    --muted:#8791c4;
+    --muted2:#5a6291;
+    --white:#f3f4f8;
+    --pink:#e64a68;
+    --pink-dark:#c73a56;
+    --confirmed:#d16be0;
+    --green:#22c55e;
+    --warn-bg:#241d12;
+    --warn-border:#4a3a1c;
+    --warn-icon:#f2b705;
+  }
+  *,*::before,*::after{box-sizing:border-box;margin:0;padding:0;-webkit-tap-highlight-color:transparent;}
+  html,body{height:100%;}
+  body{
+    font-family:'Segoe UI',system-ui,-apple-system,sans-serif;
+    background:#000;
+    color:var(--white);
+  }
+  .phone{
+    max-width:480px;
+    margin:0 auto;
+    height:100vh;
+    height:100dvh;
+    background:var(--bg-app);
+    display:flex;
+    flex-direction:column;
+    position:relative;
+    overflow:hidden;
+    transition:max-width .15s;
+  }
+
+  /* ---------- TOP APP BAR ---------- */
+  .appbar{
+    display:flex;
+    align-items:center;
+    gap:10px;
+    padding:10px 14px;
+    background:linear-gradient(135deg,var(--topbar-1),var(--topbar-2));
+    flex-shrink:0;
+    z-index:20;
+  }
+  .back-btn{
+    display:none;
+    width:30px;height:30px;
+    align-items:center;justify-content:center;
+    color:var(--white);
+    cursor:pointer;
+    flex-shrink:0;
+    border-radius:50%;
+  }
+  .back-btn:active{ background:#ffffff22; }
+  .appbar.detail .back-btn{display:flex;}
+  .logo-badge{
+    width:34px;height:34px;
+    border-radius:9px;
+    flex-shrink:0;
+    overflow:hidden;
+  }
+  .logo-badge img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .appbar-title{flex:1;min-width:0;}
+  .appbar-title h1{
+    font-size:17px;font-weight:700;color:var(--white);
+    white-space:nowrap;overflow:hidden;text-overflow:ellipsis;
+  }
+  .refresh-btn{
+    width:34px;height:34px;border-radius:50%;
+    display:flex;align-items:center;justify-content:center;
+    background:transparent;border:none;color:var(--white);
+    cursor:pointer;flex-shrink:0;
+  }
+  .refresh-btn:active{ background:#ffffff22; }
+  .refresh-btn svg{ width:19px;height:19px; }
+  .refresh-btn.spin svg{animation:spin .7s linear;}
+  @keyframes spin{to{transform:rotate(360deg);}}
+
+  /* ---------- TAB BAR (mobile only) ---------- */
+  .tabbar{
+    display:flex;
+    background:var(--tabbar);
+    flex-shrink:0;
+  }
+  .tab{
+    flex:1;
+    text-align:center;
+    padding:13px 8px;
+    font-size:13px;
+    font-weight:600;
+    color:var(--muted);
+    cursor:pointer;
+    border-bottom:2px solid transparent;
+    transition:color .15s,border-color .15s;
+  }
+  .tab.active{color:var(--white);border-bottom-color:var(--white);}
+
+  /* ---------- BODY LAYOUT ---------- */
+  .body-row{ flex:1; min-height:0; position:relative; }
+  .pane-map{ position:absolute; inset:0; }
+  .sidepane{
+    position:absolute; inset:0;
+    background:var(--bg-app);
+    display:flex; flex-direction:column;
+    z-index:10;
+  }
+  .sidepane.hide{ display:none; }
+
+  #map{ position:absolute; inset:0; background:#171a2b; }
+  .faults-chip{
+    position:absolute; top:12px; right:12px; z-index:5;
+    background:#0d0f1cdd; color:var(--white);
+    font-size:12px; font-weight:500;
+    padding:6px 10px; border-radius:20px;
+    display:flex; align-items:center; gap:6px;
+    cursor:pointer; user-select:none;
+    border:1px solid #ffffff22;
+  }
+  .faults-chip .dot{
+    width:12px;height:12px;border-radius:50%;
+    border:2px solid #9aa2d6; background:transparent;
+    transition:background .15s,border-color .15s;
+  }
+  .faults-chip.on .dot{ background:#f97316; border-color:#f97316; }
+
+  .quake-marker{
+    border-radius:50%;
+    background:var(--pink);
+    border:2px solid #ffffffcc;
+    box-shadow:0 0 8px #e64a6899;
+    cursor:pointer;
+  }
+  .latest-marker{
+    width:34px;height:34px;border-radius:50%;
+    background:#fff;border:3px solid var(--pink-dark);
+    display:flex;align-items:center;justify-content:center;
+    box-shadow:0 0 0 6px #e64a6833;
+    cursor:pointer;
+    animation:pulseRing 2s infinite;
+  }
+  @keyframes pulseRing{
+    0%{ box-shadow:0 0 0 0 #e64a6855; }
+    70%{ box-shadow:0 0 0 12px #e64a6800; }
+    100%{ box-shadow:0 0 0 0 #e64a6800; }
+  }
+  .latest-marker svg{ width:18px;height:18px; }
+  .pin-marker{ cursor:pointer; }
+
+  .maplibregl-popup{ z-index:8; }
+  .maplibregl-popup-content{
+    background:#171a30 !important; border:1px solid #30375c !important;
+    color:var(--white) !important; border-radius:12px !important;
+    box-shadow:0 8px 24px #000a !important;
+    padding:16px 18px 14px 16px !important;
+    font-family:inherit !important; min-width:220px;
+  }
+  .maplibregl-popup-tip{ border-top-color:#171a30 !important; }
+  .maplibregl-popup-close-button{
+    display:flex !important; align-items:center !important; justify-content:center !important;
+    color:var(--muted) !important;
+    font-size:16px !important;
+    width:24px !important; height:24px !important;
+    line-height:1 !important; padding:0 !important;
+    top:10px !important; right:10px !important;
+    border-radius:50% !important;
+    background:#ffffff0d !important;
+  }
+  .maplibregl-popup-close-button:hover{ background:#ffffff1a !important; color:var(--white) !important; }
+  .popup-title{ font-size:11.5px; font-weight:700; color:var(--muted); text-transform:uppercase; letter-spacing:.4px; margin:0 30px 8px 0;}
+  .popup-date{ font-size:12px; color:#cbd0f0; margin-bottom:6px; }
+  .popup-row{ font-size:12px; color:#cbd0f0; margin-bottom:2px; }
+  .popup-row b{ color:var(--white); }
+  .popup-link{ display:inline-block; margin-top:8px; color:#7fb8ff; font-size:12.5px; font-weight:600; text-decoration:none; cursor:pointer; }
+
+  /* --- LIST VIEW --- */
+  .view{ display:none; flex:1; min-height:0; flex-direction:column; }
+  .view.active{ display:flex; }
+  #listScroll{ flex:1; overflow-y:auto; padding:12px 12px 24px; -webkit-overflow-scrolling:touch; }
+  .disclaimer{
+    display:flex; gap:10px; align-items:flex-start;
+    background:var(--warn-bg); border:1px solid var(--warn-border);
+    border-radius:10px; padding:12px 14px; margin-bottom:12px;
+    font-size:12px; color:#c9c2ab; line-height:1.5;
+  }
+  .disclaimer .ic{ color:var(--warn-icon); font-size:16px; flex-shrink:0; }
+  .disclaimer b{ color:#f2d98a; }
+
+  .event-row{
+    display:flex; align-items:stretch; gap:0;
+    background:var(--card-solid); border:1px solid var(--card-border);
+    border-radius:12px; overflow:hidden; margin-bottom:10px;
+    cursor:pointer; transition:transform .1s;
+  }
+  .event-row:active{ transform:scale(0.98); }
+  .row-mag{
+    width:76px; flex-shrink:0;
+    display:flex; align-items:center; justify-content:center;
+    color:#fff; font-weight:800; font-size:15px;
+    background:var(--pink);
+  }
+  .row-body{ flex:1; min-width:0; padding:12px 12px; }
+  .row-top{ margin-bottom:4px; }
+  .status-confirmed{ color:var(--confirmed); font-size:12px; font-weight:600; }
+  .row-date{ font-size:12px; color:var(--muted); margin-bottom:2px; }
+  .row-depth{ font-size:12px; color:var(--muted); margin-bottom:4px; }
+  .row-area{ font-size:14px; font-weight:600; color:var(--white); }
+  .row-chevron{ display:flex; align-items:center; padding:0 14px; color:var(--muted2); font-size:20px; }
+
+  .loading,.error{ text-align:center; padding:30px 10px; font-size:13px; color:var(--muted2); }
+  .error{ color:#f87171; }
+
+  /* --- DETAIL VIEW --- */
+  #detailMapWrap{ position:relative; height:56vh; min-height:260px; flex-shrink:0; }
+  #detailMap{ position:absolute; inset:0; background:#171a2b; }
+  .site-badge{
+    position:absolute; bottom:10px; left:10px; z-index:5;
+    width:30px;height:30px;border-radius:8px;
+    overflow:hidden;
+    box-shadow:0 0 0 1px #ffffff33;
+  }
+  .site-badge img{ width:100%; height:100%; object-fit:cover; display:block; }
+  .sheet{
+    flex:1; min-height:0; overflow-y:auto;
+    background:#15171c; padding:8px 20px 22px;
+    -webkit-overflow-scrolling:touch;
+  }
+  .sheet-chevron{
+    width:100%; display:flex; justify-content:center; padding:6px 0 12px;
+  }
+  .sheet-chevron svg{ width:22px; height:12px; display:block; }
+  .sheet-row{ display:flex; justify-content:space-between; align-items:baseline; }
+  .sheet-date{ font-size:19px; font-weight:700; color:var(--white); }
+  .sheet-confirmed{ font-size:16px; font-weight:700; color:var(--confirmed); }
+  .sheet-sub{ font-size:12.5px; color:var(--muted); margin-top:4px; }
+  .sheet-sub-r{ font-size:11px; color:var(--muted2); margin-top:4px; }
+  .sheet-divider{ height:1px; background:#262b36; margin:16px 0; }
+  .stat-cols{ display:flex; justify-content:space-between; text-align:center; margin-bottom:14px; }
+  .stat-col{ flex:1; }
+  .stat-icon{ margin-bottom:6px; }
+  .stat-val{ font-size:19px; font-weight:800; color:var(--white); }
+  .stat-lbl{ font-size:11px; color:var(--muted); margin-top:2px; }
+  .info-line{ display:flex; align-items:center; gap:12px; padding:12px 0 16px; border-top:1px solid #262b36; }
+  .info-ic{
+    width:32px;height:32px;border-radius:8px;flex-shrink:0;
+    display:flex;align-items:center;justify-content:center;font-size:15px;
+    background:#3d2c14; color:#f2b705;
+  }
+  .info-lbl{ font-size:11px; color:var(--muted); }
+  .info-val{ font-size:13.5px; font-weight:600; color:var(--white); margin-top:1px; }
+
+  .icon-circle{
+    width:34px;height:34px;border-radius:50%;
+    background:transparent; border:2.2px solid currentColor;
+    display:inline-flex; align-items:center; justify-content:center;
+    margin:0 auto;
+  }
+  .icon-circle svg{ width:16px;height:16px; }
+
+  .share-btn{
+    width:100%;
+    display:flex; align-items:center; justify-content:center; gap:8px;
+    background:linear-gradient(135deg,var(--topbar-1),var(--topbar-2));
+    color:var(--white); border:none;
+    padding:13px; border-radius:12px;
+    font-size:14px; font-weight:600;
+    cursor:pointer; margin-top:2px;
+  }
+  .share-btn:active{ filter:brightness(1.15); }
+  .share-btn svg{ width:17px;height:17px; }
+  .share-btn.busy{ opacity:.65; pointer-events:none; }
+
+  .toast{
+    position:fixed; bottom:24px; left:50%; transform:translateX(-50%) translateY(12px);
+    background:#1e2330; border:1px solid #3d4a63; color:#e2e8f0;
+    padding:10px 20px; border-radius:8px; font-size:13px;
+    opacity:0; transition:opacity .2s,transform .2s; pointer-events:none; z-index:9999;
+    white-space:nowrap;
+  }
+  .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
+
+  /* ---------- RESPONSIVE / DESKTOP ---------- */
+  @media (min-width: 860px){
+    .phone{ max-width:1080px; box-shadow:0 0 40px #000a; }
+    .tabbar{ display:none; }
+    .body-row{ display:flex; flex-direction:row; }
+    .pane-map{ position:relative; flex:1.7; min-width:0; }
+    .sidepane{
+      position:relative; inset:auto;
+      flex:0 0 400px; max-width:400px;
+      border-left:1px solid var(--card-border);
+      display:flex !important;
+    }
+  }
+  @media (max-width: 520px){
+    .row-mag{ width:64px; font-size:13px; }
+    .stat-val{ font-size:16px; }
+  }
+</style>
+</head>
+<body>
+<div class="phone">
+
+  <!-- APP BAR -->
+  <div class="appbar" id="appbar">
+    <div class="back-btn" id="backBtn">
+      <svg viewBox="0 0 24 24" width="20" height="20" fill="none" stroke="currentColor" stroke-width="2.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="15 18 9 12 15 6"/></svg>
+    </div>
+    <div class="logo-badge"><img src="data:image/png;base64,iVBORw0KGgoAAAANSUhEUgAAACAAAAAgCAYAAABzenr0AAAACXBIWXMAAA7EAAAOxAGVKw4bAAAK70lEQVRYhY2Xe3RUVZbGf+dWqhIwBJIUCcisNaiBBqFpZQHKgHYLQh4kiMICRFGmlUZbGhtQBOT9VMd+OMPQKAgNDU0L+CAgEB7tdA+OBMyDZ0gQiJJHpSp1byWFqdQ9qdrzRxUgj14zZ62z1r1n7bO/vb+zz977KP6fQ8SfErGjeSgei4rqr5TqLiJpoFCKgIhUo1S5YUSPOIyEfcpIDfyfShWo618xmNtkWlu9WQmG4w2R6CSgvcRllbq2Q8X3qR/ub0XUDkFWJya6z98K+kMYxZ2GAolIUpu2lgrRWQoSQKj3eNl/4DDFxScwTROny0U0EgWlSE3tyMAB/Rk5cjjdunUlzkybCGudTj1PqS4td7JD3WxQ7E8kcK+2I5+i6AdQfKyYNWs3kJycTH5+DoMGDaCzOy0OohARLKuJ48XH2ft5EYFAgJdeeoGhQwYDcO7c+fM/f2HGkyUlJTezEdNwMyW27X0AHEVAhmUFmDd/Cenpacye/SvSU1MBCIVaqbpwEZ/XBwrcbjc9e2bRvl0SoAg0BfjNb9dQX+/hnbeW0xJqYcLEKWZdbUNuTU3t8Vtdvj5EAvfqtshXCiOjouI8c954k2XLFvHgA/3Qts2OXZ9SWLiPpKRE+va5n4zMTBDw+XycqzhPKBRiVF4O48c/hcvp5NSZs8yfv5i33lpOt7u7UvDEeHPmq9OGTJw49TYmEJEk2zZP2rYpZeVfSm7O41Jf/41obcqBA59Ibt4I2fzH9yUYrBetTdG2KbZtirYt0doU2/bL96EG2bp1g+QVZMvBg7tFa0u83stS8ESulJYeleZgvdi2VSniTb6NAa0Db4PM8Zsmz0+Zxh83rcOdnsbvfruGK3V1rFy+iHbtkrh69Xv27z/IsWPHaWjwXQ/AoUMGk5uXQ0qHu2gN2yxavAJ3upvXX5tBc3OQ56dMY8P6NbjdbkSia12utFeuex9u9WbZtqltbclzzz8jJaX/LVqbsnLlInn33RWitSmhkE9Wr14sBaNzZNOmtVL97Vmx7UYJhxulpua8bPvzBnlq7GhZtnKBtLR4RWtL3vv3d2Tp0vmitSknT/6PPPf802JrU2zbjITDVt8bgddmrre1JYcOF8rcebNF6ybZs2eHzJo9XbS2pL7+oowZM0p27vpTjHZtiW2bYutr9N+Yuwv/ImPG5IvHc1Fsbcob82bK7sKPxNamLFg4R4oO7hbbNqWtrWlb/Oz9KVqb39s6IE8+VSA+77fS3Fwn2TnD5erVBgkGGyQ3b4ScOn3sxrlrU8JWjVxdMT9ugCXatsTWAbFtU86dOyEFT+RKc3O9tLT4JCdvhFiBGmls/FbGjX8yHkNWOBgMug07ovIE1b7myhUyu2TSKTWFLVu2M3Xqv5KY6GL58tXMmPEyvX7U8/rlESBaVYUc+iK+JogSFIJCkdUji1dnvMzK1e/gdCYw9cUpbN68lY4dU8jM6Mx339UgCldSu8how4HxmAIOFB2mID8XgIOHjpCfn4vH00BNbQ3Dh/3sRtpQCoWBVFbR5jfBtkEpxAogIvH8Ljz6yFA8Hi8ej5e8vJEcOfI3BCjIz+FA0WGUCBJluBGNSn8ROH68hIcGDcTrayQ1NRWHodix8xMmTZqAUjdqRdS0Yh5XVuEY9lOil6oBhX51FtG6esTvJ3qmAqUUz0yawEcf7SLB4SAjIwOvp4FBgwZy4sTXceYi/Q2l6K6Ahx8eRErHDmjbZty4MYAiPS2dR4YOIRoIEF6wGJTCnvoSkUuXkNpaEn46FCovoCQKFVVES0tp21eEXrsOUPzL4IdIS09DBMY+VUDY1iQnt2fw4IevxX931XrpTEQZhoFSIFEQide2+L+CSNEhIuvW49q/h3BuAY4ZryB/P4rztZlE9+7DeO5ZWme/geO+e8DbSJvpp90H6yDYDCIgEZRyxLyORkAZsXUE1bJwTgSljBiYQhAMpSAqiFIohyKKA0lJRoJBVFIibcVf4+zeHeeyhdgz55DwzESiFRXovx1FJThw9PsxkaKDJAwZDMqIFxwVA0eBQQxLhATnonkBIM3r9ZGRkYnWNs3BIKmpqfh8PjIyMgBFpKoKe8xYnNu3Il9+hfGjHuByobRGqi5g9OpNwokSVO9eqEcfQU6exrlgPg0NPjIy3JiWRYcOHXA5nTQ0eMnMzEREbEOEakR4bc6bhEIt1NbWsXzFW6Dg/Q82UlJSBgiOHlmoHlkYfe/HGJ2PGtA/lsfbuYieOo3qmYUxfixGXjYJD/bD9f4ayspOsn7DRpRysGrVu9TW1BEO27w+Z0HsxiDVBqhyUYoHH/gJJ06U0P2f/4kLFy4SjQqTnh7Phxs3g8RuQeJnu1COBJyTn8Xo2zd26++5h7bSMozObhKG/QxHj6wYzS4XGz7cwvgJ44hG27hw4Ru639OdkpIy+vTpHT8Wo9wwDHUEgdzcEezZuw+Ug8eHD+Ng0WHuu+9eHA6DktLSWDwoI2557EyVAD17knB3FwQD4lMwKC8/RTQi9MzK4vDhv/Loo0NRIuwu/Jz8UdnEQp0jiFidtDZDtm1KfkG2WFatWFat5I0aKaFQo/j938moUdly6fJZ0boplm51IFYPdEDCl09Lyx9+E19rEq0DUv1theTkjRCfr1pCoUbJzh0ufv8VCQRqZcyTBfFaYumrV71dYsXItjbbtiV79uyQpcsWiNaWfLzrT/Lmm6+L1gG5fPmM5OQ+Ll/8136xbStehCzR1wqTDoiOz6NHD0p27uPyzcXTonVAFi2eK9v/slG0DsiqVUukcM+OuKy1U13rCMLhxl62bWlbWzJhwlg5c7pYtG3JosVzZe0ffidaW+I3r8j0X02TZydPkP0HPpOm5nhjok0JBj1y+K97ZcrPJ8v0GdOk0f+daB2Qde+/J3PmzhStTTlz7oRMnDQuZqztF9v+/oGbGhLbtt5DqRmNPh8vvPgyW7Z8SKeUDqxY9W+0tLSwZPF8XK5ErlypYdfHn1JefopwuA2lBEeCg0EDBjB27Bju7tYVbdssW7oShzOBJUsWEgw2M3nyi6xb9x907ZKJiGx0uVJfuKknEvG0r6wsr6isLJPSsi+lYHSOeL2XRWtTPt+7U/JGjZSPdmyRUCjWbMS8b/oB/U3S2uqXjz/ZJtk5w2TXJ9tE64D4vNWSn58jJSVHr/URl6NiptzWkgFMn/6LXl+Xln358c5taQ1eL/MXLGP1yiX07dObUGsr27Zu59DhL0hJ6chP+vUhMzMTFHgafJw5fRa/32TEiMd4bvLTJLVrT8XZCubMW8iqFUv4cb/7UahmER5xuVJP3dEAgLy8kYMa/eb+7X/elJacfBdz5y8mo7ObWTNnkJraEVCYpkllZRUer5doNEpnt5s+fXqTnu5GIZiWxe9//5/U1Xl4++1lpKelAaq5rU0XtGuX8feb31O3vAsAfv3rX/aaNevV3V27du4JwtGjx/hg/SY6JCeTmzuSwYMfIi0tLVZMlEKAgBXgq6+KKSzcR1MwyCu//AVDhwxGEJRQLfBEzPMfAKo7MHBtiHiTtTbeBvVSPANR52ngYNEhiotLsKwAhsNBpE1jGA46derIwIH9yckeQbdud8cTFoDa6HTKTKXSmu+Ec5sBtxISDnv6KuWaBzIOcN2ROMX1dB1fb1NKfSbCykRXajnXZG9V/o8YuNN7NxgMuhMTw6MRY7gQ7a9EuqNUUlzGjkK1Q6lygSO2jhQm35XhuaFPXUu9t4H8L2YZhqO8Tw5tAAAAAElFTkSuQmCC" alt="Logo"></div>
+    <div class="appbar-title"><h1>SeaQuake</h1></div>
+    <button class="refresh-btn" id="refreshBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
+  </div>
+
+  <!-- TABS (mobile) -->
+  <div class="tabbar" id="tabbar">
+    <div class="tab active" data-tab="map">Map</div>
+    <div class="tab" data-tab="list">Last <span id="evtCount">…</span> Events</div>
+  </div>
+
+  <div class="body-row">
+    <!-- MAP (always mounted) -->
+    <div class="pane-map" id="mapWrap">
+      <div id="map"></div>
+      <div class="faults-chip" id="faultsChip"><span>Faults</span><span class="dot"></span></div>
+    </div>
+
+    <!-- SIDE PANE: list / detail -->
+    <div class="sidepane hide" id="sidePane">
+      <div class="view active" id="view-list">
+        <div id="listScroll">
+          <div class="disclaimer">
+            <span class="ic">⚠</span>
+            <span><b>Disclaimer!</b> In the first few minutes after an earthquake, event parameters may fluctuate and erroneous, unless have been reviewed by seismologist.</span>
+          </div>
+          <div id="listRows"><div class="loading">Loading data...</div></div>
+        </div>
+      </div>
+
+      <div class="view" id="view-detail">
+        <div id="detailMapWrap">
+          <div id="detailMap"></div>
+          <div class="site-badge"><img src="data:image/png;base64,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" alt="Logo"></div>
+        </div>
+        <div class="sheet" id="sheetContent"></div>
+      </div>
+    </div>
+  </div>
+
+</div>
+
+<div id="toast" class="toast"></div>
+
+<script>
+/* ===================== CONFIG ===================== */
+const REALTIME_URL = "https://bmkg-content-inatews.storage.googleapis.com/live30event.xml";
+const FAULTS_URL    = "https://bmkg-content-inatews.storage.googleapis.com/indo_faults_lines.geojson";
+const CARTO_KEY     = "cb1_2ez2_1_84e9e596b117da5dc6f9359e";
+const MAP_STYLE     = `https://basemaps.cartocdn.com/gl/dark-matter-gl-style/style.json?key=${CARTO_KEY}`;
+const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov","Dec"];
+
+let events = [];
+let mainMap = null, detailMap = null;
+let faultsOn = false;
+let faultsGeo = null; // cache so it is not fetched repeatedly
+let activeTab = "map";
+let lastOpenedFrom = "map";
+let currentDetailEvent = null;
+
+/* ===================== HELPERS ===================== */
+function parseWaktu(w){
+  const m = (w||"").match(/(\d{4})\/(\d{2})\/(\d{2})\D+(\d{2}):(\d{2}):(\d{2})/);
+  if(!m) return null;
+  const [,y,mo,d,hh,mi,ss] = m.map(Number);
+  return new Date(Date.UTC(y, mo-1, d, hh, mi, ss));
+}
+function fmtListUTC(w){
+  const dt = parseWaktu(w); if(!dt) return w;
+  const d = String(dt.getUTCDate()).padStart(2,"0");
+  return `${d} ${MONTHS[dt.getUTCMonth()]} ${dt.getUTCFullYear()} ${String(dt.getUTCHours()).padStart(2,"0")}:${String(dt.getUTCMinutes()).padStart(2,"0")}:${String(dt.getUTCSeconds()).padStart(2,"0")} UTC`;
+}
+function fmtDetailDate(w){
+  const dt = parseWaktu(w); if(!dt) return w;
+  return `${MONTHS[dt.getUTCMonth()]} ${dt.getUTCDate()}, ${dt.getUTCFullYear()}`;
+}
+function fmtDetailTime(w){
+  const dt = parseWaktu(w); if(!dt) return w;
+  return `${String(dt.getUTCHours()).padStart(2,"0")}:${String(dt.getUTCMinutes()).padStart(2,"0")}:${String(dt.getUTCSeconds()).padStart(2,"0")} UTC`;
+}
+function timeAgo(w){
+  const dt = parseWaktu(w); if(!dt) return "";
+  const diff = Math.max(0, Math.floor((Date.now() - dt.getTime())/1000));
+  if(diff < 60) return "just now";
+  if(diff < 3600) return `${Math.floor(diff/60)} minute${Math.floor(diff/60)>1?"s":""} ago`;
+  if(diff < 86400) return `${Math.floor(diff/3600)} hour${Math.floor(diff/3600)>1?"s":""} ago`;
+  return `${Math.floor(diff/86400)} day${Math.floor(diff/86400)>1?"s":""} ago`;
+}
+function cap(s){ return s ? s.charAt(0).toUpperCase()+s.slice(1) : "Confirmed"; }
+function magColor(mag){
+  const m = parseFloat(mag);
+  if(m >= 6) return "#dc2626";
+  if(m >= 5) return "#e64a68";
+  if(m >= 4) return "#ec6f8e";
+  if(m >= 3) return "#f38ba8";
+  return "#f9a8c0";
+}
+function magRadius(mag){
+  const m = parseFloat(mag);
+  if(m >= 6) return 15;
+  if(m >= 5) return 12;
+  if(m >= 4) return 9;
+  if(m >= 3) return 7;
+  return 6;
+}
+function isMobileDevice(){ return /Mobi|Android|iPhone|iPad|iPod/i.test(navigator.userAgent); }
+function showToast(msg){
+  const t = document.getElementById("toast");
+  t.textContent = msg; t.classList.add("show");
+  setTimeout(() => t.classList.remove("show"), 2200);
+}
+
+const pulseSVG = `<svg viewBox="0 0 24 24" fill="none" stroke="#c73a56" stroke-width="2.5" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 8 12 10 6 14 18 16 12 22 12"/></svg>`;
+const pulseIconMini  = `<div class="icon-circle" style="color:#e64a68"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="2 12 8 12 10 6 14 18 16 12 22 12"/></svg></div>`;
+const targetIconMini = (color) => `<div class="icon-circle" style="color:${color}"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2"><circle cx="12" cy="12" r="3.4" fill="currentColor" stroke="none"/></svg></div>`;
+const chevronUpSVG = `<svg viewBox="0 0 40 20" fill="none" stroke="#4b5563" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 16 20 4 36 16"/></svg>`;
+
+function pinMarkerSVG(color){
+  return `<svg width="46" height="68" viewBox="0 0 54 80" style="display:block;filter:drop-shadow(0 3px 6px #0009)">
+    <ellipse cx="27" cy="73" rx="12" ry="4.5" fill="${color}55"/>
+    <path d="M27 2 C13 2 3 12.5 3 25.5 C3 41 27 71 27 71 C27 71 51 41 51 25.5 C51 12.5 41 2 27 2 Z" fill="${color}" stroke="#fff" stroke-width="3"/>
+    <circle cx="27" cy="25.5" r="14.5" fill="#fff"/>
+    <polyline points="15 25.5 20.5 25.5 23.5 16 28 35 31 25.5 39 25.5" fill="none" stroke="${color}" stroke-width="3" stroke-linecap="round" stroke-linejoin="round"/>
+  </svg>`;
+}
+
+/* ===================== FETCH ===================== */
+async function fetchXML(url){
+  const r = await fetch(url);
+  if(!r.ok) throw new Error(`HTTP ${r.status}`);
+  return await r.text();
+}
+async function getFaultsGeo(){
+  if(faultsGeo) return faultsGeo;
+  const res = await fetch(FAULTS_URL);
+  if(!res.ok) throw new Error("faults fetch failed");
+  faultsGeo = await res.json();
+  return faultsGeo;
+}
+
+let lastDataSig = null;
+async function loadRealtime(){
+  try{
+    const text = await fetchXML(REALTIME_URL);
+    const xml = new DOMParser().parseFromString(text, "application/xml");
+    if(xml.querySelector("parsererror")) throw new Error("gagal parse data");
+    const getVal = (n,tag) => { const t = n.querySelector(tag); return t ? t.textContent.trim() : "-"; };
+    const evts = Array.from(xml.querySelectorAll("gempa")).map(g => ({
+      mag: getVal(g,"mag"), waktu: getVal(g,"waktu"), dalam: getVal(g,"dalam"),
+      area: getVal(g,"area"), lintang: getVal(g,"lintang"), bujur: getVal(g,"bujur"),
+      status: getVal(g,"status")
+    }));
+
+    // Avoid re-rendering (DOM + marker churn) if data is exactly the same as before
+    const sig = evts.map(g => g.waktu + g.mag).join("|");
+    if(sig === lastDataSig) return;
+    lastDataSig = sig;
+
+    events = evts;
+    document.getElementById("evtCount").textContent = events.length;
+    renderList();
+    tryPlotMainMarkers();
+  }catch(e){
+    document.getElementById("listRows").innerHTML = `<div class="error">Failed to load data: ${e.message}</div>`;
+  }
+}
+
+/* ===================== LIST VIEW ===================== */
+function renderList(){
+  const el = document.getElementById("listRows");
+  if(!events.length){ el.innerHTML = `<div class="loading">No data available.</div>`; return; }
+  el.innerHTML = events.map((g,i) => `
+    <div class="event-row" data-idx="${i}">
+      <div class="row-mag" style="background:${magColor(g.mag)}">M ${g.mag}</div>
+      <div class="row-body">
+        <div class="row-top"><span class="status-confirmed">Status: ${cap(g.status)}</span></div>
+        <div class="row-date">${fmtListUTC(g.waktu)}</div>
+        <div class="row-depth">Depth: ${g.dalam} km</div>
+        <div class="row-area">${g.area}</div>
+      </div>
+      <div class="row-chevron">›</div>
+    </div>`).join("");
+  el.querySelectorAll(".event-row").forEach(row => {
+    row.addEventListener("click", () => openDetail(parseInt(row.dataset.idx,10), "list"));
+  });
+}
+
+/* ===================== MAIN MAP ===================== */
+let mainMapReady = false;
+function initMainMap(){
+  mainMap = new maplibregl.Map({
+    container: "map", style: MAP_STYLE,
+    center: [118, -2.5], zoom: 3.3, attributionControl: true
+  });
+  mainMap.addControl(new maplibregl.NavigationControl(), "top-left");
+  mainMap.on("load", async () => {
+    try{
+      const geo = await getFaultsGeo();
+      mainMap.addSource("faults", { type:"geojson", data:geo });
+      mainMap.addLayer({ id:"faults-layer", type:"line", source:"faults",
+        layout:{ visibility:"none" },
+        paint:{ "line-color":"#f97316", "line-width":1.4, "line-opacity":0.75 } });
+    }catch(e){}
+    mainMapReady = true;
+    tryPlotMainMarkers();
+  });
+}
+function tryPlotMainMarkers(){
+  if(mainMapReady && events.length) plotMarkers(mainMap, events);
+}
+let mainMarkers = [];
+function plotMarkers(map, evts){
+  if(!map) return;
+  mainMarkers.forEach(m => m.remove());
+  mainMarkers = [];
+  evts.forEach((g,i) => {
+    const lat = parseFloat(g.lintang), lon = parseFloat(g.bujur);
+    if(isNaN(lat) || isNaN(lon)) return;
+    const el = document.createElement("div");
+    if(i === 0){
+      el.className = "latest-marker";
+      el.innerHTML = pulseSVG;
+    } else {
+      const r = magRadius(g.mag);
+      el.className = "quake-marker";
+      el.style.width = r*2+"px"; el.style.height = r*2+"px";
+      el.style.background = magColor(g.mag);
+    }
+    const marker = new maplibregl.Marker({ element: el })
+      .setLngLat([lon, lat])
+      .setPopup(new maplibregl.Popup({ offset: 22, closeButton:true, maxWidth:"260px" })
+        .setHTML(popupHTML(g, i)))
+      .addTo(map);
+    marker.getPopup().on("open", () => closeOtherPopups(marker));
+    mainMarkers.push(marker);
+  });
+
+  // Every time data loads / refreshes: automatically focus on the latest earthquake + open its info card
+  if(activeTab === "map") showLatestOnMap();
+}
+function closeOtherPopups(except){
+  mainMarkers.forEach(m => {
+    if(m !== except){
+      const p = m.getPopup();
+      if(p && p.isOpen()) p.remove();
+    }
+  });
+}
+function showLatestOnMap(){
+  if(!mainMap || !mainMarkers.length) return;
+  const latest = mainMarkers[0];
+  const { lng, lat } = latest.getLngLat();
+  mainMap.flyTo({ center: [lng, lat], zoom: Math.max(mainMap.getZoom(), 5), speed: 0.9 });
+  const popup = latest.getPopup();
+  if(popup && !popup.isOpen()) latest.togglePopup();
+}
+function popupHTML(g, idx){
+  return `
+    <div class="popup-title">${idx===0 ? "Latest Earthquake" : "Earthquake Info"}</div>
+    <div class="popup-date">${fmtListUTC(g.waktu)}</div>
+    <div class="popup-row">Magnitude: <b>${g.mag}</b></div>
+    <div class="popup-row">Depth: <b>${g.dalam} km</b></div>
+    <a class="popup-link" data-open-idx="${idx}">${g.area} →</a>`;
+}
+document.addEventListener("click", e => {
+  const idx = e.target?.dataset?.openIdx;
+  if(idx !== undefined) openDetail(parseInt(idx,10), activeTab);
+});
+document.getElementById("faultsChip").addEventListener("click", function(){
+  faultsOn = !faultsOn;
+  this.classList.toggle("on", faultsOn);
+  if(mainMap && mainMap.getLayer("faults-layer")){
+    mainMap.setLayoutProperty("faults-layer", "visibility", faultsOn ? "visible" : "none");
+  }
+});
+
+/* ===================== DETAIL VIEW ===================== */
+function openDetail(idx, from){
+  const g = events[idx];
+  if(!g) return;
+  currentDetailEvent = g;
+  lastOpenedFrom = from || activeTab;
+  const lat = parseFloat(g.lintang), lon = parseFloat(g.bujur);
+
+  document.getElementById("appbar").classList.add("detail");
+  document.getElementById("sidePane").classList.remove("hide");
+  document.getElementById("view-list").classList.remove("active");
+  document.getElementById("view-detail").classList.add("active");
+
+  document.getElementById("sheetContent").innerHTML = `
+    <div class="sheet-row">
+      <span class="sheet-date">${fmtDetailDate(g.waktu)}</span>
+      <span class="sheet-confirmed">${cap(g.status)}</span>
+    </div>
+    <div class="sheet-row">
+      <span class="sheet-sub">${fmtDetailTime(g.waktu)} (${timeAgo(g.waktu)})</span>
+      <span class="sheet-sub-r">Status</span>
+    </div>
+    <div class="sheet-divider"></div>
+    <div class="stat-cols">
+      <div class="stat-col">
+        <div class="stat-icon">${pulseIconMini}</div>
+        <div class="stat-val">${g.mag}</div>
+        <div class="stat-lbl">Magnitude</div>
+      </div>
+      <div class="stat-col">
+        <div class="stat-icon">${targetIconMini("#22c55e")}</div>
+        <div class="stat-val">${g.dalam} <span style="font-size:12px">km</span></div>
+        <div class="stat-lbl">Depth</div>
+      </div>
+      <div class="stat-col">
+        <div class="stat-icon">${targetIconMini("#e64a68")}</div>
+        <div class="stat-val" style="font-size:14px">${lat.toFixed(2)} <span class="stat-lbl" style="display:inline">LAT</span></div>
+        <div class="stat-val" style="font-size:14px">${lon.toFixed(2)} <span class="stat-lbl" style="display:inline">LON</span></div>
+      </div>
+    </div>
+    <div class="info-line">
+      <div class="info-ic">📍</div>
+      <div><div class="info-lbl">F-E Region</div><div class="info-val">${g.area}</div></div>
+    </div>
+    <button class="share-btn" id="shareBtn">
+      <svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.2" stroke-linecap="round" stroke-linejoin="round"><circle cx="18" cy="5" r="3"/><circle cx="6" cy="12" r="3"/><circle cx="18" cy="19" r="3"/><line x1="8.6" y1="10.5" x2="15.4" y2="6.5"/><line x1="8.6" y1="13.5" x2="15.4" y2="17.5"/></svg>
+      <span id="shareBtnLabel">${isMobileDevice() ? "Share Image" : "Save Picture"}</span>
+    </button>
+  `;
+  document.getElementById("shareBtn").addEventListener("click", () => generateShareCard(g));
+
+  requestAnimationFrame(() => {
+    if(!detailMap){
+      detailMap = new maplibregl.Map({
+        container: "detailMap", style: MAP_STYLE,
+        center: [lon, lat], zoom: 6.5, interactive: true, attributionControl:false
+      });
+      detailMap.once("load", () => detailMap.resize());
+    } else {
+      detailMap.resize();
+      detailMap.jumpTo({ center:[lon,lat], zoom:6.5 });
+    }
+    // Marker does not need to wait for tiles to finish loading, so it is always placed immediately
+    // (sebelumnya nunggu event "load" yg cuma nyala sekali, jadi marker lama nyangkut)
+    placeDetailMarker(g, lat, lon);
+  });
+}
+let detailMarker = null;
+function placeDetailMarker(g, lat, lon){
+  if(detailMarker) detailMarker.remove();
+  const el = document.createElement("div");
+  el.className = "pin-marker";
+  el.innerHTML = pinMarkerSVG(magColor(g.mag));
+  detailMarker = new maplibregl.Marker({ element: el, anchor: "bottom" }).setLngLat([lon, lat]).addTo(detailMap);
+}
+
+document.getElementById("backBtn").addEventListener("click", () => {
+  document.getElementById("appbar").classList.remove("detail");
+  document.getElementById("view-detail").classList.remove("active");
+  document.getElementById("view-list").classList.add("active");
+  switchTab(lastOpenedFrom);
+});
+
+/* ===================== TABS ===================== */
+function switchTab(tab){
+  activeTab = tab;
+  document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
+  document.getElementById("appbar").classList.remove("detail");
+  document.getElementById("view-detail").classList.remove("active");
+  document.getElementById("view-list").classList.add("active");
+  const sidePane = document.getElementById("sidePane");
+  if(tab === "map"){
+    sidePane.classList.add("hide");
+    requestAnimationFrame(() => { if(mainMap){ mainMap.resize(); showLatestOnMap(); } });
+  } else {
+    sidePane.classList.remove("hide");
+  }
+}
+document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () => switchTab(t.dataset.tab)));
+
+/* ===================== REFRESH ===================== */
+document.getElementById("refreshBtn").addEventListener("click", async function(){
+  this.classList.add("spin");
+  await loadRealtime();
+  if(activeTab === "map") showLatestOnMap(); // force fly + open popup even if data has not changed
+  setTimeout(() => this.classList.remove("spin"), 700);
+});
+window.addEventListener("resize", () => {
+  if(mainMap) mainMap.resize();
+  if(detailMap) detailMap.resize();
+});
+
+// ResizeObserver: make sure the map always resizes as soon as its container size changes
+// (fixes the case of an "empty" map / marker not showing when the container just became visible)
+if("ResizeObserver" in window){
+  new ResizeObserver(() => { if(mainMap) mainMap.resize(); }).observe(document.getElementById("mapWrap"));
+  new ResizeObserver(() => { if(detailMap) detailMap.resize(); }).observe(document.getElementById("detailMapWrap"));
+}
+
+/* ===================== SAVE RESOURCES: pause refresh while tab is hidden ===================== */
+let refreshTimer = setInterval(loadRealtime, 60000);
+document.addEventListener("visibilitychange", () => {
+  if(document.hidden){
+    clearInterval(refreshTimer);
+  } else {
+    loadRealtime();
+    refreshTimer = setInterval(loadRealtime, 60000);
+  }
+});
+
+/* ===================== SHARE CARD (canvas, ala app BMKG) ===================== */
+function drawRoundedRect(ctx, x, y, w, h, r){
+  ctx.beginPath();
+  ctx.moveTo(x + r, y);
+  ctx.arcTo(x + w, y, x + w, y + h, r);
+  ctx.arcTo(x + w, y + h, x, y + h, r);
+  ctx.arcTo(x, y + h, x, y, r);
+  ctx.arcTo(x, y, x + w, y, r);
+  ctx.closePath();
+}
+function iconPulseCanvas(ctx, cx, cy, r, color){
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.lineWidth = 2.5; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(cx - r * 0.6, cy);
+  ctx.lineTo(cx - r * 0.22, cy);
+  ctx.lineTo(cx - r * 0.04, cy - r * 0.5);
+  ctx.lineTo(cx + r * 0.18, cy + r * 0.5);
+  ctx.lineTo(cx + r * 0.38, cy);
+  ctx.lineTo(cx + r * 0.6, cy);
+  ctx.stroke();
+  ctx.restore();
+}
+function iconTargetCanvas(ctx, cx, cy, r, color){
+  ctx.save();
+  ctx.strokeStyle = color; ctx.lineWidth = 3;
+  ctx.beginPath(); ctx.arc(cx, cy, r, 0, Math.PI * 2); ctx.stroke();
+  ctx.beginPath(); ctx.arc(cx, cy, r * 0.38, 0, Math.PI * 2); ctx.stroke();
+  ctx.restore();
+}
+function valueWithUnit(ctx, value, unit, cx, y, valueFont, unitFont, valueColor, unitColor){
+  ctx.font = valueFont;
+  const vw = ctx.measureText(value + " ").width;
+  ctx.font = unitFont;
+  const uw = ctx.measureText(unit).width;
+  let x = cx - (vw + uw) / 2;
+  ctx.textAlign = "left";
+  ctx.font = valueFont; ctx.fillStyle = valueColor;
+  ctx.fillText(value + " ", x, y);
+  x += vw;
+  ctx.font = unitFont; ctx.fillStyle = unitColor;
+  ctx.fillText(unit, x, y);
+}
+function drawBigMarkerCanvas(ctx, mx, my, color){
+  const r = 34;
+  ctx.beginPath();
+  ctx.fillStyle = "rgba(236,72,153,0.35)";
+  ctx.arc(mx, my + r * 1.9 + 8, 15, 0, Math.PI * 2);
+  ctx.fill();
+  ctx.lineWidth = 3; ctx.strokeStyle = "#ec4899";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.moveTo(mx - r, my);
+  ctx.bezierCurveTo(mx - r, my - r * 1.05, mx + r, my - r * 1.05, mx + r, my);
+  ctx.bezierCurveTo(mx + r, my + r * 0.85, mx, my + r * 1.9, mx, my + r * 1.9);
+  ctx.bezierCurveTo(mx, my + r * 1.9, mx - r, my + r * 0.85, mx - r, my);
+  ctx.closePath();
+  ctx.fillStyle = color;
+  ctx.fill();
+  ctx.lineWidth = 4; ctx.strokeStyle = "#fff";
+  ctx.stroke();
+  ctx.beginPath();
+  ctx.fillStyle = "#fff";
+  ctx.arc(mx, my, r * 0.62, 0, Math.PI * 2);
+  ctx.fill();
+  const s = r * 0.62;
+  ctx.strokeStyle = color; ctx.lineWidth = 3.5; ctx.lineJoin = "round"; ctx.lineCap = "round";
+  ctx.beginPath();
+  ctx.moveTo(mx - s * 0.7, my);
+  ctx.lineTo(mx - s * 0.25, my);
+  ctx.lineTo(mx - s * 0.05, my - s * 0.55);
+  ctx.lineTo(mx + s * 0.2, my + s * 0.55);
+  ctx.lineTo(mx + s * 0.45, my);
+  ctx.lineTo(mx + s * 0.7, my);
+  ctx.stroke();
+}
+let cachedLogoImg = null;
+function getLogoImg(){
+  return new Promise((resolve, reject) => {
+    if(cachedLogoImg){ resolve(cachedLogoImg); return; }
+    const src = document.querySelector(".logo-badge img")?.src;
+    if(!src) { reject(new Error("logo not found")); return; }
+    const img = new Image();
+    img.onload = () => { cachedLogoImg = img; resolve(img); };
+    img.onerror = reject;
+    img.src = src;
+  });
+}
+async function drawSiteBadge(ctx, mapAreaH){
+  try{
+    const img = await getLogoImg();
+    const size = 64, x = 40, y = mapAreaH - 40 - size, radius = 16;
+    ctx.save();
+    ctx.shadowColor = "rgba(0,0,0,0.45)";
+    ctx.shadowBlur = 12;
+    drawRoundedRect(ctx, x, y, size, size, radius);
+    ctx.clip();
+    ctx.shadowColor = "transparent";
+    ctx.drawImage(img, x, y, size, size);
+    ctx.restore();
+  }catch(e){}
+}
+function shareOrDownloadImage(canvas, filename){
+  canvas.toBlob(async (blob) => {
+    if(!blob) return showToast("Failed to create image");
+    const file = new File([blob], filename, { type: "image/png" });
+    if(isMobileDevice() && navigator.canShare && navigator.canShare({ files: [file] })){
+      try{
+        await navigator.share({ files: [file], title: "Earthquake Info · SeaQuake" });
+        return;
+      }catch(e){ if(e && e.name === "AbortError") return; }
+    }
+    const url = URL.createObjectURL(blob);
+    const a = document.createElement("a");
+    a.href = url; a.download = filename;
+    document.body.appendChild(a); a.click(); a.remove();
+    setTimeout(() => URL.revokeObjectURL(url), 4000);
+    showToast("Image saved!");
+  }, "image/png");
+}
+
+async function generateShareCard(g){
+  const lat = parseFloat(g.lintang), lon = parseFloat(g.bujur);
+  if(isNaN(lat) || isNaN(lon)) return showToast("Invalid coordinates");
+  const btn = document.getElementById("shareBtn");
+  if(btn) btn.classList.add("busy");
+  showToast("Generating image...");
+
+  const outW = 1080, outH = 1920, panelH = 380;
+  const hdScale = 2;
+  const mapAreaH = outH - panelH;
+  const color = magColor(g.mag);
+
+  const hiddenBox = document.createElement("div");
+  hiddenBox.style.cssText = `position:fixed;left:-99999px;top:0;width:${outW}px;height:${mapAreaH}px;`;
+  document.body.appendChild(hiddenBox);
+
+  const exportMap = new maplibregl.Map({
+    container: hiddenBox, style: MAP_STYLE,
+    center: [lon, lat], zoom: 7.2, pixelRatio: hdScale,
+    interactive: false, attributionControl: false, preserveDrawingBuffer: true
+  });
+
+  try{
+    await new Promise(resolve => {
+      exportMap.once("load", async () => {
+        try{
+          const geo = await getFaultsGeo();
+          exportMap.addSource("faults", { type: "geojson", data: geo });
+          exportMap.addLayer({ id: "faults-layer", type: "line", source: "faults",
+            paint: { "line-color": "#f97316", "line-width": 1.5, "line-opacity": 0.75 } });
+        }catch(e){}
+        resolve();
+      });
+    });
+    await new Promise(r => exportMap.once("idle", r));
+    await new Promise(r => setTimeout(r, 300));
+  }catch(e){}
+
+  const mapCanvas = exportMap.getCanvas();
+  const mapW = mapCanvas.width, mapH = mapCanvas.height;
+
+  const canvas = document.createElement("canvas");
+  canvas.width = outW * hdScale; canvas.height = outH * hdScale;
+  const ctx = canvas.getContext("2d");
+  ctx.scale(hdScale, hdScale);
+
+  ctx.fillStyle = "#0b0d12";
+  ctx.fillRect(0, 0, outW, outH);
+
+  const srcAspect = mapW / mapH, dstAspect = outW / mapAreaH;
+  let sx, sy, sw, sh;
+  if(srcAspect > dstAspect){ sh = mapH; sw = mapH * dstAspect; sx = (mapW - sw) / 2; sy = 0; }
+  else { sw = mapW; sh = mapW / dstAspect; sx = 0; sy = (mapH - sh) / 2; }
+  ctx.drawImage(mapCanvas, sx, sy, sw, sh, 0, 0, outW, mapAreaH);
+
+  exportMap.remove();
+  hiddenBox.remove();
+
+  const mx = outW / 2, my = mapAreaH / 2 - 30;
+  drawBigMarkerCanvas(ctx, mx, my, color);
+  await drawSiteBadge(ctx, mapAreaH);
+
+  const panelY = mapAreaH;
+  ctx.fillStyle = "#15171c";
+  ctx.fillRect(0, panelY, outW, panelH);
+
+  let y = panelY + 62;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#f9fafb";
+  ctx.font = "700 40px 'Segoe UI', sans-serif";
+  ctx.fillText(fmtDetailDate(g.waktu), 40, y);
+
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#e879f9";
+  ctx.font = "700 34px 'Segoe UI', sans-serif";
+  ctx.fillText(cap(g.status), outW - 40, y);
+
+  y += 42;
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#9ca3af";
+  ctx.font = "500 26px 'Segoe UI', sans-serif";
+  ctx.fillText(`${fmtDetailTime(g.waktu)}  (${timeAgo(g.waktu)})`, 40, y);
+
+  ctx.textAlign = "right";
+  ctx.fillStyle = "#6b7280";
+  ctx.font = "500 24px 'Segoe UI', sans-serif";
+  ctx.fillText("Status", outW - 40, y);
+
+  y += 40;
+  ctx.strokeStyle = "#262b36"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(outW - 40, y); ctx.stroke();
+
+  const statY = y + 60;
+  const col1 = outW * 0.17, col2 = outW * 0.5, col3 = outW * 0.83;
+
+  iconPulseCanvas(ctx, col1, statY, 22, "#e64a68");
+  ctx.textAlign = "center";
+  ctx.fillStyle = "#f9fafb"; ctx.font = "700 44px 'Segoe UI', sans-serif";
+  ctx.fillText(g.mag, col1, statY + 66);
+  ctx.fillStyle = "#9ca3af"; ctx.font = "500 24px 'Segoe UI', sans-serif";
+  ctx.fillText("Magnitude", col1, statY + 100);
+
+  iconTargetCanvas(ctx, col2, statY, 22, "#22c55e");
+  ctx.fillStyle = "#f9fafb"; ctx.font = "700 44px 'Segoe UI', sans-serif";
+  ctx.fillText(`${g.dalam} km`, col2, statY + 66);
+  ctx.fillStyle = "#9ca3af"; ctx.font = "500 24px 'Segoe UI', sans-serif";
+  ctx.fillText("Depth", col2, statY + 100);
+
+  iconTargetCanvas(ctx, col3, statY, 22, "#e64a68");
+  valueWithUnit(ctx, lat.toFixed(2), "LAT", col3, statY + 58, "700 34px 'Segoe UI', sans-serif", "500 22px 'Segoe UI', sans-serif", "#f9fafb", "#9ca3af");
+  valueWithUnit(ctx, lon.toFixed(2), "LON", col3, statY + 96, "700 34px 'Segoe UI', sans-serif", "500 22px 'Segoe UI', sans-serif", "#f9fafb", "#9ca3af");
+
+  y = statY + 140;
+  ctx.strokeStyle = "#262b36"; ctx.lineWidth = 1;
+  ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(outW - 40, y); ctx.stroke();
+  ctx.textAlign = "left";
+  ctx.fillStyle = "#6b7280"; ctx.font = "500 22px 'Segoe UI', sans-serif";
+  ctx.fillText("F-E Region", 40, y + 40);
+  ctx.fillStyle = "#f9fafb"; ctx.font = "700 28px 'Segoe UI', sans-serif";
+  ctx.fillText(g.area, 40, y + 74);
+
+  if(btn) btn.classList.remove("busy");
+  const filename = `earthquake-${(g.area || "info").replace(/[^a-z0-9]+/gi, "_").toLowerCase()}-M${g.mag}.png`;
+  shareOrDownloadImage(canvas, filename);
+}
+
+/* ===================== INIT ===================== */
+initMainMap();
+switchTab("map"); // sync initial state (sidepane hidden on mobile)
+loadRealtime();
+</script>
+<script>
+  if ("serviceWorker" in navigator) {
+    window.addEventListener("load", () => {
+      navigator.serviceWorker.register("sw.js").catch(() => {});
+    });
+  }
+</script>
+</body>
+</html>
