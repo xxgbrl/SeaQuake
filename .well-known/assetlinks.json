@@ -1,0 +1,8 @@
+[{
+      "relation": ["delegate_permission/common.handle_all_urls"],
+      "target": {
+        "namespace": "android_app",
+        "package_name": "dev.xxgbrl.seaquake.twa",
+        "sha256_cert_fingerprints": ["32:86:BA:91:51:97:B5:2B:29:48:DF:22:BB:52:FA:0E:8E:B5:2A:9A:AD:A8:D4:A1:80:1A:26:D1:37:50:19:6B"]
+      }
+    }]

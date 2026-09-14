@@ -4,14 +4,14 @@
 <meta charset="UTF-8">
 <meta name="viewport" content="width=device-width, initial-scale=1.0, viewport-fit=cover">
 <title>SeaQuake · Real-time Earthquakes</title>
-<meta name="description" content="Real-time earthquake information across ASEAN and nearby regions, powered by live data from BMKG (Indonesia)">
+<meta name="description" content="Real-time earthquake information across ASEAN and nearby regions, powered by live data from BMKG (Indonesia). Live earthquake map and event feed.">
 <meta name="keywords" content="earthquake, earthquake today, ASEAN earthquake, Southeast Asia earthquake, BMKG, InaTEWS, real-time earthquake info, SeaQuake">
 <meta name="author" content="SeaQuake">
 <meta name="robots" content="index, follow">
 <meta property="og:title" content="SeaQuake — Real-time Earthquake Monitor for ASEAN">
-<meta property="og:description" content="Real-time earthquake information across ASEAN and nearby regions, powered by live data BMKG (Indonesia).">
+<meta property="og:description" content="Real-time earthquake information across ASEAN and nearby regions, powered by live BMKG data.">
 <meta property="og:type" content="website">
-<meta name="google-site-verification" content="3_Fq9IDHc9sZGf_B4_UNEVAZLjT3ac4nlL5w4pBxdkw" />
+<meta name="google-site-verification" content="3_Fq9IDHc9sZGf_B4_UNEVAZLjT3ac4nlL5w4pBxdkw"/>
 <meta name="theme-color" content="#0b0d18">
 <link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
 <link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
@@ -851,12 +851,24 @@ function shareOrDownloadImage(canvas, filename){
   canvas.toBlob(async (blob) => {
     if(!blob) return showToast("Failed to create image");
     const file = new File([blob], filename, { type: "image/png" });
-    if(isMobileDevice() && navigator.canShare && navigator.canShare({ files: [file] })){
+
+    // Try the native share sheet first on mobile. We attempt navigator.share()
+    // directly instead of gating strictly on navigator.canShare() first, since
+    // some mobile browsers (e.g. Brave, or TWA/APK wrappers from PWABuilder)
+    // report canShare() unreliably even when share() itself actually works.
+    if(isMobileDevice() && navigator.share){
       try{
-        await navigator.share({ files: [file], title: "Earthquake Info · SeaQuake" });
-        return;
-      }catch(e){ if(e && e.name === "AbortError") return; }
+        const canShareFiles = !navigator.canShare || navigator.canShare({ files: [file] });
+        if(canShareFiles){
+          await navigator.share({ files: [file], title: "Earthquake Info · SeaQuake" });
+          return;
+        }
+      }catch(e){
+        if(e && e.name === "AbortError") return; // user cancelled the share sheet, do nothing
+        // otherwise fall through to download below
+      }
     }
+
     const url = URL.createObjectURL(blob);
     const a = document.createElement("a");
     a.href = url; a.download = filename;
