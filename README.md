@@ -16,7 +16,6 @@ Inspired by BMKG's official **WRS-AEIC** mobile app — SeaQuake is a lightweigh
 - **Detail view** — a dedicated screen per earthquake with its own focused map, magnitude/depth/coordinates, and region info
 - **Active faults overlay** — togglable fault-line layer on the map
 - **Share / Save image** — generates a shareable earthquake card; opens the native share sheet on mobile (pick any app to send it to) or downloads a PNG on desktop
-- **Installable (PWA)** — add it to your home screen for a native app–like experience
 - **Responsive** — works well on mobile and desktop, with a two-pane layout on larger screens
 - Dark UI, no front-end framework, kept lightweight on purpose
 
