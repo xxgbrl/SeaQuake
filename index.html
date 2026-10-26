@@ -13,11 +13,7 @@
 <meta property="og:type" content="website">
 <meta name="google-site-verification" content="3_Fq9IDHc9sZGf_B4_UNEVAZLjT3ac4nlL5w4pBxdkw"/>
 <meta name="theme-color" content="#0b0d18">
-<link rel="apple-touch-icon" sizes="180x180" href="apple-touch-icon.png">
-<link rel="icon" type="image/png" sizes="32x32" href="favicon-32x32.png">
-<link rel="icon" type="image/png" sizes="16x16" href="favicon-16x16.png">
 <link rel="alternate icon" href="favicon.ico">
-<link rel="manifest" href="site.webmanifest">
 <meta name="mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-capable" content="yes">
 <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
@@ -108,7 +104,7 @@
   .refresh-btn.spin svg{animation:spin .7s linear;}
   @keyframes spin{to{transform:rotate(360deg);}}
 
-  /* ---------- TAB BAR (mobile only) ---------- */
+  /* ---------- TAB BAR ---------- */
   .tabbar{
     display:flex;
     background:var(--tabbar);
@@ -342,14 +338,14 @@
     <button class="refresh-btn" id="refreshBtn"><svg viewBox="0 0 24 24" fill="none" stroke="currentColor" stroke-width="2.3" stroke-linecap="round" stroke-linejoin="round"><polyline points="23 4 23 10 17 10"/><polyline points="1 20 1 14 7 14"/><path d="M3.51 9a9 9 0 0 1 14.85-3.36L23 10M1 14l4.64 4.36A9 9 0 0 0 20.49 15"/></svg></button>
   </div>
 
-  <!-- TABS (mobile) -->
+  <!-- TABS -->
   <div class="tabbar" id="tabbar">
     <div class="tab active" data-tab="map">Map</div>
     <div class="tab" data-tab="list">Last <span id="evtCount">…</span> Events</div>
   </div>
 
   <div class="body-row">
-    <!-- MAP (always mounted) -->
+    <!-- MAP -->
     <div class="pane-map" id="mapWrap">
       <div id="map"></div>
       <div class="faults-chip" id="faultsChip"><span>Faults</span><span class="dot"></span></div>
@@ -392,7 +388,7 @@ const MONTHS = ["Jan","Feb","Mar","Apr","May","Jun","Jul","Aug","Sep","Oct","Nov
 let events = [];
 let mainMap = null, detailMap = null;
 let faultsOn = false;
-let faultsGeo = null; // cache so it is not fetched repeatedly
+let faultsGeo = null;
 let activeTab = "map";
 let lastOpenedFrom = "map";
 let currentDetailEvent = null;
@@ -455,7 +451,7 @@ const targetIconMini = (color) => `<div class="icon-circle" style="color:${color
 const chevronUpSVG = `<svg viewBox="0 0 40 20" fill="none" stroke="#4b5563" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 16 20 4 36 16"/></svg>`;
 
 function pinMarkerSVG(color){
-  return `<svg width="46" height="68" viewBox="0 0 54 80" style="display:block;filter:drop-shadow(0 3px 6px #0009)">
+  return `<svg width="30" height="45" viewBox="0 0 54 80" style="display:block;filter:drop-shadow(0 3px 6px #0009)">
     <ellipse cx="27" cy="73" rx="12" ry="4.5" fill="${color}55"/>
     <path d="M27 2 C13 2 3 12.5 3 25.5 C3 41 27 71 27 71 C27 71 51 41 51 25.5 C51 12.5 41 2 27 2 Z" fill="${color}" stroke="#fff" stroke-width="3"/>
     <circle cx="27" cy="25.5" r="14.5" fill="#fff"/>
@@ -478,7 +474,7 @@ async function getFaultsGeo(){
 }
 
 let lastDataSig = null;
-async function loadRealtime(){
+async function loadRealtime(force = false){
   try{
     const text = await fetchXML(REALTIME_URL);
     const xml = new DOMParser().parseFromString(text, "application/xml");
@@ -490,9 +486,8 @@ async function loadRealtime(){
       status: getVal(g,"status")
     }));
 
-    // Avoid re-rendering (DOM + marker churn) if data is exactly the same as before
     const sig = evts.map(g => g.waktu + g.mag).join("|");
-    if(sig === lastDataSig) return;
+    if(!force && sig === lastDataSig) return;
     lastDataSig = sig;
 
     events = evts;
@@ -520,7 +515,7 @@ function renderList(){
       <div class="row-chevron">›</div>
     </div>`).join("");
   el.querySelectorAll(".event-row").forEach(row => {
-    row.addEventListener("click", () => openDetail(parseInt(row.dataset.idx,10), "list"));
+    row.addEventListener("click", () => focusEventOnMap(parseInt(row.dataset.idx,10)));
   });
 }
 
@@ -548,10 +543,12 @@ function tryPlotMainMarkers(){
   if(mainMapReady && events.length) plotMarkers(mainMap, events);
 }
 let mainMarkers = [];
+let markerByIdx = {};
 function plotMarkers(map, evts){
   if(!map) return;
   mainMarkers.forEach(m => m.remove());
   mainMarkers = [];
+  markerByIdx = {};
   evts.forEach((g,i) => {
     const lat = parseFloat(g.lintang), lon = parseFloat(g.bujur);
     if(isNaN(lat) || isNaN(lon)) return;
@@ -572,9 +569,9 @@ function plotMarkers(map, evts){
       .addTo(map);
     marker.getPopup().on("open", () => closeOtherPopups(marker));
     mainMarkers.push(marker);
+    markerByIdx[i] = marker;
   });
 
-  // Every time data loads / refreshes: automatically focus on the latest earthquake + open its info card
   if(activeTab === "map") showLatestOnMap();
 }
 function closeOtherPopups(except){
@@ -592,6 +589,19 @@ function showLatestOnMap(){
   mainMap.flyTo({ center: [lng, lat], zoom: Math.max(mainMap.getZoom(), 5), speed: 0.9 });
   const popup = latest.getPopup();
   if(popup && !popup.isOpen()) latest.togglePopup();
+}
+function focusEventOnMap(idx){
+  const marker = markerByIdx[idx];
+  if(!marker) return;
+  if(activeTab !== "map") switchTab("map", true);
+  const go = () => {
+    if(mainMap) mainMap.resize();
+    const { lng, lat } = marker.getLngLat();
+    mainMap.flyTo({ center: [lng, lat], zoom: Math.max(mainMap.getZoom(), 5), speed: 0.9 });
+    const popup = marker.getPopup();
+    if(popup && !popup.isOpen()) marker.togglePopup();
+  };
+  requestAnimationFrame(() => requestAnimationFrame(go));
 }
 function popupHTML(g, idx){
   return `
@@ -662,13 +672,7 @@ function openDetail(idx, from){
       <span id="shareBtnLabel">${isMobileDevice() ? "Share Image" : "Save Picture"}</span>
     </button>
   `;
-  // Mulai generate gambar share DI LATAR BELAKANG sedari detail dibuka,
-  // supaya pas tombol Share benar-benar diklik, gambarnya sudah siap dan
-  // navigator.share() bisa dipanggil nyaris instan (masih dalam jendela
-  // "user gesture" milik browser). Kalau baru mulai generate SAAT diklik,
-  // proses beratnya (render peta, fetch data sesar, dst) sering bikin
-  // browser menganggap gesture sudah kedaluwarsa dan diam-diam gagal
-  // lalu fallback ke download.
+
   pendingShareCard = buildShareCardBlob(g).catch(() => null);
 
   document.getElementById("shareBtn").addEventListener("click", () => handleShareClick(g, pendingShareCard));
@@ -684,8 +688,7 @@ function openDetail(idx, from){
       detailMap.resize();
       detailMap.jumpTo({ center:[lon,lat], zoom:6.5 });
     }
-    // Marker does not need to wait for tiles to finish loading, so it is always placed immediately
-    // (sebelumnya nunggu event "load" yg cuma nyala sekali, jadi marker lama nyangkut)
+
     placeDetailMarker(g, lat, lon);
   });
 }
@@ -703,11 +706,11 @@ document.getElementById("backBtn").addEventListener("click", () => {
   document.getElementById("appbar").classList.remove("detail");
   document.getElementById("view-detail").classList.remove("active");
   document.getElementById("view-list").classList.add("active");
-  switchTab(lastOpenedFrom);
+  switchTab(lastOpenedFrom, true);
 });
 
 /* ===================== TABS ===================== */
-function switchTab(tab){
+function switchTab(tab, noFocus){
   activeTab = tab;
   document.querySelectorAll(".tab").forEach(t => t.classList.toggle("active", t.dataset.tab === tab));
   document.getElementById("appbar").classList.remove("detail");
@@ -716,7 +719,7 @@ function switchTab(tab){
   const sidePane = document.getElementById("sidePane");
   if(tab === "map"){
     sidePane.classList.add("hide");
-    requestAnimationFrame(() => { if(mainMap){ mainMap.resize(); showLatestOnMap(); } });
+    requestAnimationFrame(() => { if(mainMap){ mainMap.resize(); if(!noFocus) showLatestOnMap(); } });
   } else {
     sidePane.classList.remove("hide");
   }
@@ -726,8 +729,8 @@ document.querySelectorAll(".tab").forEach(t => t.addEventListener("click", () =>
 /* ===================== REFRESH ===================== */
 document.getElementById("refreshBtn").addEventListener("click", async function(){
   this.classList.add("spin");
-  await loadRealtime();
-  if(activeTab === "map") showLatestOnMap(); // force fly + open popup even if data has not changed
+  await loadRealtime(true);
+  if(activeTab === "map") showLatestOnMap();
   setTimeout(() => this.classList.remove("spin"), 700);
 });
 window.addEventListener("resize", () => {
@@ -735,8 +738,6 @@ window.addEventListener("resize", () => {
   if(detailMap) detailMap.resize();
 });
 
-// ResizeObserver: make sure the map always resizes as soon as its container size changes
-// (fixes the case of an "empty" map / marker not showing when the container just became visible)
 if("ResizeObserver" in window){
   new ResizeObserver(() => { if(mainMap) mainMap.resize(); }).observe(document.getElementById("mapWrap"));
   new ResizeObserver(() => { if(detailMap) detailMap.resize(); }).observe(document.getElementById("detailMapWrap"));
@@ -753,7 +754,7 @@ document.addEventListener("visibilitychange", () => {
   }
 });
 
-/* ===================== SHARE CARD (canvas, ala app BMKG) ===================== */
+/* ===================== SHARE CARD ===================== */
 function drawRoundedRect(ctx, x, y, w, h, r){
   ctx.beginPath();
   ctx.moveTo(x + r, y);
@@ -981,9 +982,6 @@ async function buildShareCardBlob(g){
   return { blob, filename };
 }
 
-// Dipanggil langsung dari click handler tombol Share — sengaja dibuat seringan
-// mungkin (idealnya cuma nunggu Promise yang sudah/hampir selesai) supaya
-// navigator.share() masih terhitung dipicu langsung oleh user gesture.
 async function handleShareClick(g, sharePromise){
   const btn = document.getElementById("shareBtn");
   let result;
@@ -1002,11 +1000,6 @@ async function handleShareClick(g, sharePromise){
 function doShareOrDownload(blob, filename){
   const file = new File([blob], filename, { type: "image/png" });
 
-  // Coba share sheet dulu di mobile. Kita coba navigator.share() langsung
-  // (bukan cuma mengandalkan navigator.canShare() dulu), karena beberapa
-  // browser mobile (mis. Brave, atau wrapper TWA/APK dari PWABuilder)
-  // kadang melaporkan canShare() secara tidak akurat walau share()
-  // sebenarnya bisa jalan.
   const tryShare = async () => {
     if(isMobileDevice() && navigator.share){
       try{
@@ -1016,7 +1009,7 @@ function doShareOrDownload(blob, filename){
           return true;
         }
       }catch(e){
-        if(e && e.name === "AbortError") return true; // user membatalkan share sheet
+        if(e && e.name === "AbortError") return true;
       }
     }
     return false;
@@ -1035,7 +1028,7 @@ function doShareOrDownload(blob, filename){
 
 /* ===================== INIT ===================== */
 initMainMap();
-switchTab("map"); // sync initial state (sidepane hidden on mobile)
+switchTab("map");
 loadRealtime();
 </script>
 <script>

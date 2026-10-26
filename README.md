@@ -6,7 +6,7 @@ Inspired by BMKG's official **WRS-AEIC** mobile app — SeaQuake is a lightweigh
 
 **🔴 Live demo:** https://seaquake.pages.dev
 
-> ⚠️ SeaQuake is an independent, unofficial project — **not affiliated with or endorsed by BMKG**. All earthquake data is sourced from BMKG's public InaTEWS feed (`bmkg-content-inatews.storage.googleapis.com`). For official warnings and information, always refer to [inatews.bmkg.go.id](https://inatews.bmkg.go.id) or other official BMKG channels.
+> ⚠️ SeaQuake is an independent, unofficial project — **not affiliated with or endorsed by BMKG**. All earthquake data is sourced from BMKG's public InaTEWS feed. For official warnings and information, always refer to [inatews.bmkg.go.id](https://inatews.bmkg.go.id) or other official BMKG channels.
 
 ## ✨ Features
 
@@ -55,12 +55,6 @@ This project uses a CARTO basemap API key embedded directly in `index.html`. If 
 seaquake/
 ├── index.html      # all markup, styling, and app logic
 ├── favicon.ico
-├── favicon-16x16.png
-├── favicon-32x32.png
-├── apple-touch-icon.png
-├── android-chrome-192x192.png
-├── android-chrome-512x512.png
-├── site.webmanifest
 ├── robots.txt
 ├── sitemap.xml
 ├── LICENSE
