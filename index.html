@@ -15,6 +15,7 @@
 <meta name="theme-color" content="#0b0d18">
 <link rel="icon" href="favicon.ico">
 
+<!-- LIBRARY PETA VECTOR -->
 <link href="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.css" rel="stylesheet" />
 <script src="https://unpkg.com/maplibre-gl@3.6.2/dist/maplibre-gl.js"></script>
 
@@ -56,7 +57,6 @@
     transition:max-width .15s;
   }
 
-  /* ---------- TOP APP BAR ---------- */
   .appbar{
     display:flex;
     align-items:center;
@@ -100,7 +100,6 @@
   .refresh-btn.spin svg{animation:spin .7s linear;}
   @keyframes spin{to{transform:rotate(360deg);}}
 
-  /* ---------- TAB BAR ---------- */
   .tabbar{
     display:flex;
     background:var(--tabbar);
@@ -302,7 +301,7 @@
   }
   .toast.show{ opacity:1; transform:translateX(-50%) translateY(0); }
 
-  /* ---------- RESPONSIVE / DESKTOP ---------- */
+  /* ---------- DESKTOP ---------- */
   @media (min-width: 860px){
     .phone{ max-width:1080px; box-shadow:0 0 40px #000a; }
     .tabbar{ display:none; }
@@ -341,13 +340,12 @@
   </div>
 
   <div class="body-row">
-    <!-- MAP -->
     <div class="pane-map" id="mapWrap">
       <div id="map"></div>
       <div class="faults-chip" id="faultsChip"><span>Faults</span><span class="dot"></span></div>
     </div>
 
-    <!-- SIDE PANE: list / detail -->
+    <!-- SIDE PANE -->
     <div class="sidepane hide" id="sidePane">
       <div class="view active" id="view-list">
         <div id="listScroll">
@@ -447,7 +445,7 @@ const targetIconMini = (color) => `<div class="icon-circle" style="color:${color
 const chevronUpSVG = `<svg viewBox="0 0 40 20" fill="none" stroke="#4b5563" stroke-width="3.4" stroke-linecap="round" stroke-linejoin="round"><polyline points="4 16 20 4 36 16"/></svg>`;
 
 function pinMarkerSVG(color){
-  return `<svg width="30" height="45" viewBox="0 0 54 80" style="display:block;filter:drop-shadow(0 3px 6px #0009)">
+  return `<svg width="32" height="47" viewBox="0 0 54 80" style="display:block;filter:drop-shadow(0 3px 6px #0009)">
     <ellipse cx="27" cy="73" rx="12" ry="4.5" fill="${color}55"/>
     <path d="M27 2 C13 2 3 12.5 3 25.5 C3 41 27 71 27 71 C27 71 51 41 51 25.5 C51 12.5 41 2 27 2 Z" fill="${color}" stroke="#fff" stroke-width="3"/>
     <circle cx="27" cy="25.5" r="14.5" fill="#fff"/>
@@ -668,7 +666,6 @@ function openDetail(idx, from){
       <span id="shareBtnLabel">${isMobileDevice() ? "Share Image" : "Save Picture"}</span>
     </button>
   `;
-
   pendingShareCard = buildShareCardBlob(g).catch(() => null);
 
   document.getElementById("shareBtn").addEventListener("click", () => handleShareClick(g, pendingShareCard));
@@ -684,12 +681,11 @@ function openDetail(idx, from){
       detailMap.resize();
       detailMap.jumpTo({ center:[lon,lat], zoom:6.5 });
     }
-
     placeDetailMarker(g, lat, lon);
   });
 }
 let detailMarker = null;
-let pendingShareCard = null; // in-flight/cached Promise<{blob,filename}> for the currently open detail's share image
+let pendingShareCard = null;
 function placeDetailMarker(g, lat, lon){
   if(detailMarker) detailMarker.remove();
   const el = document.createElement("div");
@@ -739,7 +735,7 @@ if("ResizeObserver" in window){
   new ResizeObserver(() => { if(detailMap) detailMap.resize(); }).observe(document.getElementById("detailMapWrap"));
 }
 
-/* ===================== SAVE RESOURCES: pause refresh while tab is hidden ===================== */
+/* ===================== SAVE RESOURCES ===================== */
 let refreshTimer = setInterval(loadRealtime, 60000);
 document.addEventListener("visibilitychange", () => {
   if(document.hidden){
@@ -858,7 +854,7 @@ async function buildShareCardBlob(g){
   const lat = parseFloat(g.lintang), lon = parseFloat(g.bujur);
   if(isNaN(lat) || isNaN(lon)) throw new Error("Invalid coordinates");
 
-  const outW = 1080, outH = 1920, panelH = 380;
+  const outW = 1080, outH = 1920, panelH = 464;
   const hdScale = 2;
   const mapAreaH = outH - panelH;
   const color = magColor(g.mag);
@@ -966,11 +962,31 @@ async function buildShareCardBlob(g){
   y = statY + 140;
   ctx.strokeStyle = "#262b36"; ctx.lineWidth = 1;
   ctx.beginPath(); ctx.moveTo(40, y); ctx.lineTo(outW - 40, y); ctx.stroke();
+
+  const icoSize = 64, icoX = 40, icoY = y + 24, icoCx = icoX + icoSize / 2, icoCy = icoY + icoSize / 2;
+  ctx.fillStyle = "#3d2c14";
+  drawRoundedRect(ctx, icoX, icoY, icoSize, icoSize, 16);
+  ctx.fill();
+  ctx.save();
+  ctx.translate(icoCx, icoCy + 2);
+  ctx.fillStyle = "#e0392b";
+  ctx.beginPath();
+  ctx.moveTo(0, 20);
+  ctx.bezierCurveTo(-4, 12, -12, 6, -12, -4);
+  ctx.arc(0, -4, 12, Math.PI, 0, false);
+  ctx.bezierCurveTo(12, 6, 4, 12, 0, 20);
+  ctx.closePath();
+  ctx.fill();
+  ctx.fillStyle = "#7a1d14";
+  ctx.beginPath(); ctx.arc(0, -4, 4.5, 0, Math.PI * 2); ctx.fill();
+  ctx.restore();
+
   ctx.textAlign = "left";
-  ctx.fillStyle = "#6b7280"; ctx.font = "500 22px 'Segoe UI', sans-serif";
-  ctx.fillText("F-E Region", 40, y + 40);
-  ctx.fillStyle = "#f9fafb"; ctx.font = "700 28px 'Segoe UI', sans-serif";
-  ctx.fillText(g.area, 40, y + 74);
+  const txtX = icoX + icoSize + 24;
+  ctx.fillStyle = "#8791c4"; ctx.font = "500 22px 'Segoe UI', sans-serif";
+  ctx.fillText("F-E Region", txtX, icoCy - 9);
+  ctx.fillStyle = "#f3f4f8"; ctx.font = "700 28px 'Segoe UI', sans-serif";
+  ctx.fillText(g.area, txtX, icoCy + 22);
 
   const filename = `earthquake-${(g.area || "info").replace(/[^a-z0-9]+/gi, "_").toLowerCase()}-M${g.mag}.png`;
   const blob = await new Promise(resolve => canvas.toBlob(resolve, "image/png"));
@@ -1026,13 +1042,6 @@ function doShareOrDownload(blob, filename){
 initMainMap();
 switchTab("map");
 loadRealtime();
-</script>
-<script>
-  if ("serviceWorker" in navigator) {
-    window.addEventListener("load", () => {
-      navigator.serviceWorker.register("sw.js").catch(() => {});
-    });
-  }
 </script>
 </body>
 </html>
